@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deviant MultiWallet Bot</title>
+<style>
+:root{--bg:#0b0f19;--panel:#111827;--panel2:#0f172a;--line:#253047;--text:#eef2ff;--muted:#94a3b8;--accent:#7c3aed;--green:#22c55e;--red:#ef4444}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+button,input,select{font:inherit}button{cursor:pointer}
+.wrap{max-width:1180px;margin:auto;padding:28px 20px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}
+.brand{font-size:23px;font-weight:800}.sub{color:var(--muted);font-size:13px;margin-top:4px}
+.badge{border:1px solid #14532d;background:#052e16;color:#86efac;padding:7px 11px;border-radius:999px;font-size:12px}
+.grid{display:grid;grid-template-columns:1.4fr .8fr;gap:18px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}
+h2{font-size:17px;margin:0 0 16px}.label{display:block;color:var(--muted);font-size:12px;margin:14px 0 7px}
+input,select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px 12px;outline:none}
+input:focus,select:focus{border-color:var(--accent)}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.wallet{display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--line);border-radius:11px;margin:9px 0;background:#0c1424}
+.wallet small{color:var(--muted)}.wallet .right{display:flex;align-items:center;gap:10px}.dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.btn{border:0;border-radius:10px;padding:11px 14px;font-weight:700}.primary{background:var(--accent);color:white}.secondary{background:#1e293b;color:#e2e8f0;border:1px solid var(--line)}.danger{background:#3f1515;color:#fecaca;border:1px solid #7f1d1d}
+.actions{display:flex;gap:10px;margin-top:18px}.actions .btn{flex:1}
+.stat{padding:14px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;margin-bottom:10px}.stat b{display:block;font-size:20px;margin-top:4px}.muted{color:var(--muted);font-size:12px}
+.plan{margin-top:18px;border-top:1px solid var(--line);padding-top:18px}.planrow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #1d2738;font-size:13px}
+.notice{padding:12px;border-radius:10px;background:#172033;color:#cbd5e1;font-size:12px;line-height:1.5;margin-top:15px}
+.empty{color:var(--muted);text-align:center;padding:20px 0;font-size:13px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><div class="brand">Deviant MultiWallet Bot</div><div class="sub">Solana multi-wallet purchase planner · Devnet test mode</div></div>
+    <div class="badge">● DEVNET / SIMULATION</div>
+  </div>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>Buy setup</h2>
+      <label class="label">Token mint address</label>
+      <input id="mint" placeholder="Paste Devnet token mint">
+
+      <div class="row">
+        <div><label class="label">Total budget (SOL)</label><input id="budget" type="number" min="0" step="0.001" value="1"></div>
+        <div><label class="label">Allocation</label>
+          <select id="allocation"><option value="equal">Equal split</option><option value="custom">Custom (preview only)</option></select>
+        </div>
+      </div>
+
+      <h2 style="margin-top:22px">Wallets</h2>
+      <div id="wallets"></div>
+      <div class="actions">
+        <button class="btn secondary" onclick="addWallet()">+ Add test wallet</button>
+        <button class="btn primary" onclick="preparePlan()">Prepare buy</button>
+      </div>
+
+      <div id="plan" class="plan" style="display:none">
+        <h2>Purchase plan</h2>
+        <div id="planRows"></div>
+        <div class="notice">This MVP only prepares a transaction plan. It does not request private keys and does not move funds.</div>
+        <div class="actions">
+          <button class="btn secondary" onclick="clearPlan()">Cancel</button>
+          <button class="btn primary" onclick="simulate()">Simulate transactions</button>
+        </div>
+      </div>
+    </section>
+
+    <aside>
+      <div class="panel">
+        <h2>Overview</h2>
+        <div class="stat"><span class="muted">Wallets selected</span><b id="count">2</b></div>
+        <div class="stat"><span class="muted">Total budget</span><b id="total">1 SOL</b></div>
+        <div class="stat"><span class="muted">Network</span><b>Solana Devnet</b></div>
+        <div id="status" class="notice">Ready. Add your test wallets and prepare a purchase plan.</div>
+      </div>
+      <div class="panel" style="margin-top:18px">
+        <h2>Transaction history</h2>
+        <div id="history" class="empty">No simulated transactions yet.</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+let wallets=[
+ {id:1,name:"Test Wallet A",address:"Devnet wallet A",enabled:true},
+ {id:2,name:"Test Wallet B",address:"Devnet wallet B",enabled:true}
+];
+
+function render(){
+ const box=document.getElementById("wallets");
+ box.innerHTML=wallets.map(w=>`
+ <div class="wallet">
+   <div><b>${w.name}</b><br><small>${w.address}</small></div>
+   <div class="right"><span class="dot"></span><input type="checkbox" ${w.enabled?"checked":""} onchange="toggle(${w.id},this.checked)"></div>
+ </div>`).join("");
+ const n=wallets.filter(w=>w.enabled).length;
+ document.getElementById("count").textContent=n;
+ updateTotal();
+}
+function toggle(id,v){const w=wallets.find(x=>x.id===id);if(w)w.enabled=v;render()}
+function addWallet(){
+ const n=wallets.length+1;
+ wallets.push({id:n,name:"Test Wallet "+String.fromCharCode(64+n),address:"Devnet wallet "+n,enabled:true});
+ render();
+}
+function updateTotal(){
+ const b=Math.max(0,Number(document.getElementById("budget").value)||0);
+ document.getElementById("total").textContent=b.toFixed(3).replace(/\.?0+$/,"")+" SOL";
+}
+document.getElementById("budget").addEventListener("input",updateTotal);
+
+function preparePlan(){
+ const selected=wallets.filter(w=>w.enabled), budget=Number(document.getElementById("budget").value)||0;
+ if(!selected.length){alert("Select at least one wallet.");return}
+ if(!budget){alert("Enter a budget.");return}
+ const each=budget/selected.length;
+ document.getElementById("planRows").innerHTML=selected.map(w=>`
+ <div class="planrow"><span>${w.name}</span><b>${each.toFixed(4)} SOL</b></div>`).join("");
+ document.getElementById("plan").style.display="block";
+ document.getElementById("status").textContent="Plan prepared. Review the allocation before simulation.";
+}
+function clearPlan(){document.getElementById("plan").style.display="none";document.getElementById("status").textContent="Plan cancelled."}
+function simulate(){
+ const selected=wallets.filter(w=>w.enabled), budget=Number(document.getElementById("budget").value)||0, each=budget/selected.length;
+ const mint=document.getElementById("mint").value.trim()||"No mint supplied";
+ const time=new Date().toLocaleTimeString();
+ document.getElementById("history").innerHTML=`<div class="planrow"><span>${time}</span><b>SIMULATED</b></div><div class="muted" style="margin-top:8px">Mint: ${mint}<br>Budget: ${budget} SOL across ${selected.length} wallets</div>`;
+ document.getElementById("status").textContent="Simulation complete. No real SOL or tokens were moved.";
+}
+render();
+</script>
+</body>
+</html>
